@@ -9,7 +9,7 @@
 #include <iostream>
 
 using test_t = ::std::atomic<::std::uint32_t>;
-const test_t::value_type count_limit = 4294901760U; // 2**32 - 2**16
+const test_t::value_type count_limit = 429490176U; // 2**32 - 2**16
 
 ::std::array<test_t, 128> counters;
 using hrt_time_t = ::std::chrono::high_resolution_clock::time_point;
@@ -50,5 +50,6 @@ int main()
     test_t counter = 0;
     count_thread(counter, timesaver);
     auto interval = finish - start;
-    ::std::cout << "Count took " << interval << " to finish.\n";
+    ::std::chrono::duration<double> interval_in_seconds = interval;
+    ::std::cout << "Count took " << interval_in_seconds << " to finish.\n";
 }
