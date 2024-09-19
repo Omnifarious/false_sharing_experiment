@@ -1,6 +1,5 @@
-#include <atomic>
 #include <cstdint>
-#include <tuple>
+#include <atomic>
 #include <memory>
 #include <array>
 #include <barrier>
@@ -11,7 +10,7 @@
 using test_t = ::std::atomic<::std::uint32_t>;
 const test_t::value_type count_limit = 429490176U; // 2**32 - 2**16
 
-::std::array<test_t, 128> counters;
+alignas(64) ::std::array<test_t, 128> counters;
 using hrt_time_t = ::std::chrono::high_resolution_clock::time_point;
 
 class save_times {
@@ -46,10 +45,14 @@ void count_thread(test_t &counter, benchmark_barrier &latch)
 int main()
 {
    hrt_time_t start, finish;
-   benchmark_barrier timesaver{1, save_times{start, finish}};
-   test_t counter = 0;
-   count_thread(counter, timesaver);
+   benchmark_barrier timesaver{2, save_times{start, finish}};
+   {
+      using ::std::ref;
+      ::std::jthread t{count_thread, ref(counters[0]), ref(timesaver)};
+      count_thread(counters[15], timesaver);
+   }
    auto interval = finish - start;
    ::std::chrono::duration<double> interval_in_seconds = interval;
-   ::std::cout << "Count took " << interval_in_seconds << " to finish.\n";
+   ::std::cout << "Count took " << interval_in_seconds.count()
+        << " seconds to finish.\n";
 }
