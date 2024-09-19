@@ -15,41 +15,41 @@ const test_t::value_type count_limit = 429490176U; // 2**32 - 2**16
 using hrt_time_t = ::std::chrono::high_resolution_clock::time_point;
 
 class save_times {
-  public:
-     save_times(hrt_time_t &start, hrt_time_t &finish) :
+ public:
+   save_times(hrt_time_t &start, hrt_time_t &finish) :
         start_(start), finish_(finish)
-     {}
-     void operator()() {
-        if (!started_) {
-            start_ = ::std::chrono::high_resolution_clock::now();
-            started_ = true;
-        } else {
-            finish_ = ::std::chrono::high_resolution_clock::now();
-        }
-     }
+   {}
+   void operator()() {
+      if (!started_) {
+         start_ = ::std::chrono::high_resolution_clock::now();
+         started_ = true;
+      } else {
+         finish_ = ::std::chrono::high_resolution_clock::now();
+      }
+   }
 
-  private:
-    hrt_time_t &start_;
-    hrt_time_t &finish_;
-    bool started_ = false;
+ private:
+   hrt_time_t &start_;
+   hrt_time_t &finish_;
+   bool started_ = false;
 };
 using benchmark_barrier = ::std::barrier<save_times>;
 
 void count_thread(test_t &counter, benchmark_barrier &latch)
 {
-    latch.arrive_and_wait();
-    while (++counter < count_limit)
-       ;
-    latch.arrive_and_wait();
+   latch.arrive_and_wait();
+   while (++counter < count_limit)
+      ;
+   latch.arrive_and_wait();
 }
 
 int main()
 {
-    hrt_time_t start, finish;
-    benchmark_barrier timesaver{1, save_times{start, finish}};   
-    test_t counter = 0;
-    count_thread(counter, timesaver);
-    auto interval = finish - start;
-    ::std::chrono::duration<double> interval_in_seconds = interval;
-    ::std::cout << "Count took " << interval_in_seconds << " to finish.\n";
+   hrt_time_t start, finish;
+   benchmark_barrier timesaver{1, save_times{start, finish}};
+   test_t counter = 0;
+   count_thread(counter, timesaver);
+   auto interval = finish - start;
+   ::std::chrono::duration<double> interval_in_seconds = interval;
+   ::std::cout << "Count took " << interval_in_seconds << " to finish.\n";
 }
