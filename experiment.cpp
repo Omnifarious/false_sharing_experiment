@@ -5,7 +5,7 @@
 #include <barrier>
 #include <thread>
 #include <chrono>
-#include <iostream>
+#include <fmt/core.h>
 
 using test_t = ::std::atomic<::std::uint64_t>;
 
@@ -66,8 +66,8 @@ void count_thread(test_t &counter, const test_t::value_type count_limit, benchma
 
 test_t::value_type find_appropriate_limit()
 {
-   ::std::cout << "Calculating what count will give worthwhile results on "
-                  "your CPU.\n";
+   using ::fmt::print;
+   print("Calculating what count will give worthwhile results on your CPU.\n");
    using namespace ::std::literals::chrono_literals;
    using ::std::chrono::duration;
    bool found = false;
@@ -82,9 +82,8 @@ test_t::value_type find_appropriate_limit()
       time_saver();
       auto const interval = finish - start;
       non_atomic_seconds = interval;
-      ::std::cout << "Count: " << current_estimate
-                  << " took " << non_atomic_seconds.count()
-                  << " seconds for ordinary counting.\n";
+      print("Count: {} took {} seconds for ordinary counting.\n",
+            current_estimate, non_atomic_seconds.count());
       if (interval < 5ms) {
          if (interval < 1ms) {
             current_estimate *= 100;
@@ -108,21 +107,21 @@ test_t::value_type find_appropriate_limit()
       time_saver();
       auto const interval = finish - start;
       duration<double> const interval_in_seconds = interval;
-      ::std::cout << "Count: " << current_estimate
-                  << " took " << interval_in_seconds.count()
-                  << " seconds for single-thread atomic counting.\n";
-      ::std::cout << "Atomic is " << interval_in_seconds / non_atomic_seconds
-                  << " times slower than non-atomic.\n";
+      print("Count: {} took {} seconds for single-thread atomic counting.\n",
+            current_estimate, interval_in_seconds.count());
+      print("Atomic is {} times slow than non-atomic.\n",
+            interval_in_seconds / non_atomic_seconds);
    }
    return current_estimate;
 }
 
 void test_cooperating_threads_same_counter(test_t::value_type const count_limit)
 {
+   using ::fmt::print;
    test_t counter = 0;
    hrt_time_t start, finish;
    benchmark_barrier timesaver{2, save_times{start, finish}};
-   ::std::cout << "\nTesting two threads cooperating on the same count.\n";
+   print("\nTesting two threads cooperating on the same count.\n");
    {
       using ::std::ref;
       ::std::jthread t{count_thread, ref(counter), count_limit, ref(timesaver)};
@@ -130,8 +129,7 @@ void test_cooperating_threads_same_counter(test_t::value_type const count_limit)
    }
    auto interval = finish - start;
    ::std::chrono::duration<double> interval_in_seconds = interval;
-   ::std::cout << "Count took " << interval_in_seconds.count()
-               << " seconds to finish.\n";
+   print("Count took {} seconds to finish.\n", interval_in_seconds.count());
 }
 
 int main()
