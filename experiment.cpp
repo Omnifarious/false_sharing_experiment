@@ -1,17 +1,14 @@
 #include <cstdint>
 #include <atomic>
 #include <memory>
-#include <array>
 #include <barrier>
 #include <thread>
 #include <chrono>
 #include <fmt/core.h>
 
 using test_t = ::std::atomic<::std::uint64_t>;
-
-alignas(64) ::std::array<test_t, 128> counters;
 using hrt_time_t = ::std::chrono::high_resolution_clock::time_point;
-
+using time_result_t = ::std::chrono::duration<double>;  // Seconds as double.
 
 class save_times {
  public:
@@ -64,7 +61,7 @@ void count_thread(test_t &counter, const test_t::value_type count_limit, benchma
    latch.arrive_and_wait();
 }
 
-test_t::value_type find_appropriate_limit()
+auto find_appropriate_limit()
 {
    using ::fmt::print;
    print("Calculating what count will give worthwhile results on your CPU.\n");
@@ -82,7 +79,7 @@ test_t::value_type find_appropriate_limit()
       time_saver();
       auto const interval = finish - start;
       non_atomic_seconds = interval;
-      print("Count: {} took {} seconds for ordinary counting.\n",
+      print("Count: {} took {:.4f} seconds for ordinary counting.\n",
             current_estimate, non_atomic_seconds.count());
       if (interval < 5ms) {
          if (interval < 1ms) {
@@ -98,24 +95,31 @@ test_t::value_type find_appropriate_limit()
          found = true;
       }
    }
-   {
-      hrt_time_t start, finish;
-      save_times time_saver{start, finish};
-      test_t counter = 0;
-      time_saver();
-      count_atomic(counter, current_estimate);
-      time_saver();
-      auto const interval = finish - start;
-      duration<double> const interval_in_seconds = interval;
-      print("Count: {} took {} seconds for single-thread atomic counting.\n",
-            current_estimate, interval_in_seconds.count());
-      print("Atomic is {} times slow than non-atomic.\n",
-            interval_in_seconds / non_atomic_seconds);
-   }
-   return current_estimate;
+   struct {
+      test_t::value_type count_limit;
+      time_result_t count_duration;
+   } retval = {current_estimate, non_atomic_seconds};
+   return retval;
 }
 
-void test_cooperating_threads_same_counter(test_t::value_type const count_limit)
+time_result_t test_single_thread_atomic(test_t::value_type const count_limit)
+{
+   using ::fmt::print;
+   using ::std::chrono::duration;
+   hrt_time_t start, finish;
+   save_times time_saver{start, finish};
+   test_t counter = 0;
+   time_saver();
+   count_atomic(counter, count_limit);
+   time_saver();
+   auto const interval = finish - start;
+   duration<double> const interval_in_seconds = interval;
+   print("Count: {} took {:.4f} seconds for single-thread atomic counting.\n",
+         count_limit, interval_in_seconds.count());
+   return interval_in_seconds;
+}
+
+time_result_t test_cooperating_threads_same_counter(test_t::value_type const count_limit)
 {
    using ::fmt::print;
    test_t counter = 0;
@@ -129,11 +133,16 @@ void test_cooperating_threads_same_counter(test_t::value_type const count_limit)
    }
    auto interval = finish - start;
    ::std::chrono::duration<double> interval_in_seconds = interval;
-   print("Count took {} seconds to finish.\n", interval_in_seconds.count());
+   print("Count took {:.4f} seconds to finish.\n", interval_in_seconds.count());
+   return interval_in_seconds;
 }
 
 int main()
 {
-   auto const count_limit = find_appropriate_limit();
+   using ::fmt::print;
+   auto const [count_limit, normal_time] = find_appropriate_limit();
+   auto const atomic_time = test_single_thread_atomic(count_limit);
+   print("Atomic is {:.2f} times slow than non-atomic.\n",
+         atomic_time / normal_time);
    test_cooperating_threads_same_counter(count_limit);
 }
