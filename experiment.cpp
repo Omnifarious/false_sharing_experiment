@@ -83,11 +83,11 @@ auto find_appropriate_limit()
             current_estimate, non_atomic_seconds.count());
       if (interval < 5ms) {
          if (interval < 1ms) {
-            current_estimate *= 100;
+            current_estimate *= 128;
          } else {
             current_estimate *= 2;
          }
-      } else if (interval > (200ms + 2ms) || interval < (200ms - 2ms)) {
+      } else if (interval > 202ms || interval < 198ms) {
          duration<double> const double_200ms = 200ms;
          auto factor = double_200ms / interval;
          current_estimate = factor * current_estimate;
