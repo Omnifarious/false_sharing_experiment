@@ -142,7 +142,7 @@ int main()
    using ::fmt::print;
    auto const [count_limit, normal_time] = find_appropriate_limit();
    auto const atomic_time = test_single_thread_atomic(count_limit);
-   print("Atomic is {:.2f} times slow than non-atomic.\n",
+   print("Atomic is {:.2f} times slower than non-atomic.\n",
          atomic_time / normal_time);
    test_cooperating_threads_same_counter(count_limit);
 }
