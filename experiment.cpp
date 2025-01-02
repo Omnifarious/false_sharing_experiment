@@ -1,15 +1,33 @@
 #include <cstdint>
 #include <atomic>
 #include <memory>
+#include <string>
 #include <barrier>
 #include <thread>
 #include <chrono>
 #include <array>
 #include <fmt/core.h>
 
+
+/*
+  ┌───────────────────┬─────────┬──────────────┬───────────┬──────┬───────────┐
+  │ Task              │ Threads │ Ops / thread │ Total ops │ Time │ Time / op │
+  ├───────────────────┼─────────┼──────────────┼───────────┼──────┼───────────┤
+  └───────────────────┴─────────┴──────────────┴───────────┴──────┴───────────┘
+ */
+
 using test_t = ::std::atomic<::std::uint64_t>;
 using hrt_time_t = ::std::chrono::high_resolution_clock::time_point;
 using time_result_t = ::std::chrono::duration<double>;  // Seconds as double.
+
+struct Result {
+   ::std::string task;
+   ::std::uint8_t threads;
+   ::std::uint64_t ops_per_thread;
+   ::std::uint64_t total_ops;
+   time_result_t time;
+   time_result_t time_per_op;
+};
 
 template <typename T>
 constexpr T highest_bit(T val)
@@ -110,6 +128,7 @@ auto find_appropriate_limit()
          duration<double> const double_200ms = 200ms;
          auto factor = double_200ms / interval;
          current_estimate = factor * current_estimate;
+         current_estimate &= ~0x01UL;  // Round down to nearest even number.
       } else {
          found = true;
       }
@@ -258,15 +277,80 @@ auto guess_cache_line_size(
    return decltype(spacing){0};
 }
 
+void print_results_table(::std::vector<Result> const &results)
+{
+    using ::fmt::print;
+    print(
+"┌───────────────────┬─────────┬──────────────┬─────────────┬────────┬───────────┐\n"
+"│ Task              │ Threads │ Ops / thread │ Total ops   │ Time   │ Time / op │\n"
+    );
+    for (auto const &result : results) {
+        print("├───────────────────┼─────────┼──────────────┼─────────────┼────"
+              "────┼───────────┤\n");
+        print("│ {:>17s} │ {:<7d} │ {:<12d} │ {:<11d} | {:<6f} | {:<9f} |\n",
+              result.task,
+              result.threads,
+              result.ops_per_thread,
+              result.total_ops,
+              result.time.count(),
+              result.time_per_op.count()
+        );
+    }
+    print("└───────────────────┴─────────┴──────────────┴─────────────┴────────"
+          "┴───────────┘\n");
+}
+
 int main()
 {
+   ::std::vector<Result> results;
    using ::fmt::print;
    auto const [count_limit, normal_time] = find_appropriate_limit();
+   results.emplace_back(Result{
+       "Volatile Count",
+        1,
+        count_limit,
+        count_limit,
+        normal_time,
+        normal_time / count_limit
+   });
    auto const atomic_time = test_single_thread_atomic(count_limit);
+   results.emplace_back(Result{
+        "Atomic Count",
+        1,
+        count_limit,
+        count_limit,
+        atomic_time,
+        atomic_time / count_limit
+   });
    print("Atomic is {:.2f} times slower than non-atomic.\n",
          atomic_time / normal_time);
-   test_cooperating_threads_same_counter(count_limit);
-   auto adjacent_time = test_two_threads_adjacent_counters(count_limit);
-   test_two_threads_spaced_counters(count_limit);
+   auto const same_count_time = test_cooperating_threads_same_counter(count_limit);
+   results.emplace_back(Result{
+       "Coop Threads",
+        2,
+        count_limit / 2,
+        count_limit,
+        same_count_time,
+        same_count_time / count_limit
+   });
+   auto const adjacent_time = test_two_threads_adjacent_counters(count_limit);
+   results.emplace_back(Result{
+        "Adjacent Counters",
+        2,
+        count_limit,
+        count_limit * 2,
+        adjacent_time,
+        adjacent_time / (count_limit * 2)
+   });
+   auto const spaced_time = test_two_threads_spaced_counters(count_limit);
+   results.emplace_back(Result{
+        "Spaced Counters",
+        2,
+        count_limit,
+        count_limit * 2,
+        spaced_time,
+        spaced_time / (count_limit * 2)
+   });
    guess_cache_line_size(count_limit, adjacent_time);
+   print_results_table(results);
 }
